@@ -135,7 +135,7 @@ class MyThread(Thread):
         for i in range(self.start_page, self.end_page + 1):
             tries = 0
             success = False
-            while tries < 2 and (not success):
+            while tries < 3 and (not success):
                 try:
                     tries = tries + 1
                     page_data = getPage(self.region, self.mode, i)
@@ -144,10 +144,12 @@ class MyThread(Thread):
                     success = True
                     time.sleep(1)
                 except:
-                    print(f'Error: Page {i} waiting 10 seconds to try again')
+                    print(f'Error: {self.mode}_{self.region} Page {i} waiting 10 seconds to try again')
                     time.sleep(10)
             if not success:
                 self.fails = self.fails + 1
+                if self.fails >= 3:
+                    break
 
 
 def getPage(region, leaderboardId, pageNumber):
