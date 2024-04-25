@@ -116,11 +116,11 @@ class MyThread(Thread):
                     tries = tries + 1
                     page_data = getPage(self.region, self.mode, i)
                     self.row_list = self.row_list + page_data['leaderboard']['rows']
-                    print(f'{self.mode}_{self.region} Page {i} read success!')
+                    # print(f'{self.mode}_{self.region} Page {i} read success!')
                     success = True
                     time.sleep(1)
                 except:
-                    print(f'Error: {self.mode}_{self.region} Page {i} waiting 10 seconds to try again')
+                    # print(f'Error: {self.mode}_{self.region} Page {i} waiting 10 seconds to try again')
                     time.sleep(10)
             if not success:
                 self.fails = self.fails + 1
@@ -136,15 +136,23 @@ def getPage(region, leaderboardId, pageNumber):
         return page_data
     else:
         error = f'Error {response.status_code} - {response.reason}'
-        print(error)
+        # print(error)
         raise Exception(error)
 
 
 def getLeaderBoard(region, mode):
-    try:
-        data = getPage(region, mode, 1)
-    except:
+    tries = 0
+    success = False
+    while tries < 3 and (not success):
+        try:
+            tries = tries + 1
+            data = getPage(region, mode, 1)
+            success = True
+        except:
+            time.sleep(10)
+    if not success:
         return
+        
     totalPages = data['leaderboard']['pagination']['totalPages']
     totalFails = 0
     rows_list = []
@@ -172,7 +180,10 @@ def getLeaderBoard(region, mode):
 
     if totalFails < 3:
         df = pd.DataFrame(rows_list)
-        del df['rank']
+        try:
+            del df['rank']
+        except:
+            return
         df.to_csv(f'{mode}_{region}.txt', sep=' ', index=False, encoding='utf-8')
     else:
         time.sleep(120)
