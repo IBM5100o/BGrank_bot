@@ -10,7 +10,7 @@ app = Flask('')
 
 @app.route('/')
 def main():
-    return 'This is a bot to get leaderboard from blizzard api'
+    return 'This is a bot to get leaderboard from blizzard api.'
 
 
 @app.route('/AP/')
@@ -18,16 +18,12 @@ def AP():
     reply = ''
     if os.path.exists('battlegrounds_AP.txt'):
         f = open('battlegrounds_AP.txt', 'r', encoding='utf-8')
-        first = True
-        while True:
-            line = f.readline()
-            if line == '':
-                break
-            if first:
-                first = False
-                continue
-            reply += line + '<br />'
+        lines = f.read()
         f.close()
+        newline = '\n<br />'
+        lines = lines.split('\n')
+        reply = newline.join(lines[1:-1])
+        reply += newline
     return reply
 
 
@@ -36,16 +32,12 @@ def AP_duo():
     reply = ''
     if os.path.exists('battlegroundsduo_AP.txt'):
         f = open('battlegroundsduo_AP.txt', 'r', encoding='utf-8')
-        first = True
-        while True:
-            line = f.readline()
-            if line == '':
-                break
-            if first:
-                first = False
-                continue
-            reply += line + '<br />'
+        lines = f.read()
         f.close()
+        newline = '\n<br />'
+        lines = lines.split('\n')
+        reply = newline.join(lines[1:-1])
+        reply += newline
     return reply
 
 
@@ -54,16 +46,12 @@ def US():
     reply = ''
     if os.path.exists('battlegrounds_US.txt'):
         f = open('battlegrounds_US.txt', 'r', encoding='utf-8')
-        first = True
-        while True:
-            line = f.readline()
-            if line == '':
-                break
-            if first:
-                first = False
-                continue
-            reply += line + '<br />'
+        lines = f.read()
         f.close()
+        newline = '\n<br />'
+        lines = lines.split('\n')
+        reply = newline.join(lines[1:-1])
+        reply += newline
     return reply
 
 
@@ -72,16 +60,12 @@ def US_duo():
     reply = ''
     if os.path.exists('battlegroundsduo_US.txt'):
         f = open('battlegroundsduo_US.txt', 'r', encoding='utf-8')
-        first = True
-        while True:
-            line = f.readline()
-            if line == '':
-                break
-            if first:
-                first = False
-                continue
-            reply += line + '<br />'
+        lines = f.read()
         f.close()
+        newline = '\n<br />'
+        lines = lines.split('\n')
+        reply = newline.join(lines[1:-1])
+        reply += newline
     return reply
 
 
@@ -90,16 +74,12 @@ def EU():
     reply = ''
     if os.path.exists('battlegrounds_EU.txt'):
         f = open('battlegrounds_EU.txt', 'r', encoding='utf-8')
-        first = True
-        while True:
-            line = f.readline()
-            if line == '':
-                break
-            if first:
-                first = False
-                continue
-            reply += line + '<br />'
+        lines = f.read()
         f.close()
+        newline = '\n<br />'
+        lines = lines.split('\n')
+        reply = newline.join(lines[1:-1])
+        reply += newline
     return reply
 
 
@@ -108,16 +88,12 @@ def EU_duo():
     reply = ''
     if os.path.exists('battlegroundsduo_EU.txt'):
         f = open('battlegroundsduo_EU.txt', 'r', encoding='utf-8')
-        first = True
-        while True:
-            line = f.readline()
-            if line == '':
-                break
-            if first:
-                first = False
-                continue
-            reply += line + '<br />'
+        lines = f.read()
         f.close()
+        newline = '\n<br />'
+        lines = lines.split('\n')
+        reply = newline.join(lines[1:-1])
+        reply += newline
     return reply
 
 
@@ -209,7 +185,7 @@ def leader():
         getLeaderBoard('US', 'battlegroundsduo')
         getLeaderBoard('EU', 'battlegrounds')
         getLeaderBoard('EU', 'battlegroundsduo')
-        time.sleep(100)
+        time.sleep(120)
 
 
 if __name__ == '__main__':
