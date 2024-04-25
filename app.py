@@ -171,6 +171,8 @@ def getLeaderBoard(region, mode):
         df = pd.DataFrame(rows_list)
         del df['rank']
         df.to_csv(f'{mode}_{region}.txt', sep=' ', index=False, encoding='utf-8')
+    else:
+        time.sleep(120)
 
 
 def run():
