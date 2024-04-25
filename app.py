@@ -141,7 +141,10 @@ def getPage(region, leaderboardId, pageNumber):
 
 
 def getLeaderBoard(region, mode):
-    data = getPage(region, mode, 1)
+    try:
+        data = getPage(region, mode, 1)
+    except:
+        return
     totalPages = data['leaderboard']['pagination']['totalPages']
     totalFails = 0
     rows_list = []
@@ -179,7 +182,9 @@ def run():
     app.run(host="0.0.0.0", port=8080)
 
 
-def leader():
+if __name__ == '__main__':
+    server = Thread(target=run)
+    server.start()
     while True:
         getLeaderBoard('AP', 'battlegrounds')
         getLeaderBoard('AP', 'battlegroundsduo')
@@ -188,10 +193,3 @@ def leader():
         getLeaderBoard('EU', 'battlegrounds')
         getLeaderBoard('EU', 'battlegroundsduo')
         time.sleep(120)
-
-
-if __name__ == '__main__':
-    server = Thread(target=run)
-    server.start()
-    bgrank = Thread(target=leader)
-    bgrank.start()
