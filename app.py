@@ -148,6 +148,7 @@ def getLeaderBoard(region, mode):
             tries = tries + 1
             data = getPage(region, mode, 1)
             success = True
+            time.sleep(1)
         except:
             time.sleep(10)
     if not success:
@@ -155,28 +156,32 @@ def getLeaderBoard(region, mode):
         
     totalPages = data['leaderboard']['pagination']['totalPages']
     totalFails = 0
-    rows_list = []
+    rows_list = data['leaderboard']['rows']
     threads = []
 
-    if totalPages < 10:
-        threads_num = 1
-    else:
-        threads_num = 10
+    if totalPages > 1:
+        if totalPages < 10:
+            threads_num = 1
+        else:
+            threads_num = 10
+        page_slice = totalPages // threads_num
 
-    page_slice = totalPages // threads_num
+        for i in range(threads_num):
+            if i == 0:
+                start_p = 2
+            else:
+                start_p = page_slice * i + 1
+            if i == (threads_num - 1):
+                end_p = totalPages
+            else:
+                end_p = page_slice * (i + 1)
+            threads.append(MyThread(start_p, end_p, region, mode))
+            threads[i].start()
 
-    for i in range(threads_num):
-        start_p = page_slice * i + 1
-        end_p = page_slice * (i + 1)
-        if i == (threads_num - 1):
-            end_p = totalPages
-        threads.append(MyThread(start_p, end_p, region, mode))
-        threads[i].start()
-
-    for i in range(threads_num):
-        threads[i].join()
-        rows_list = rows_list + threads[i].row_list
-        totalFails = totalFails + threads[i].fails
+        for i in range(threads_num):
+            threads[i].join()
+            rows_list = rows_list + threads[i].row_list
+            totalFails = totalFails + threads[i].fails
 
     if totalFails < 3:
         df = pd.DataFrame(rows_list)
