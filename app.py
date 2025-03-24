@@ -10,7 +10,7 @@ app = Flask('')
 
 @app.route('/')
 def main():
-    return 'This is a bot to get leaderboard from blizzard api.'
+    return 'This is a bot to get the leaderboard from Blizzard API.'
 
 
 @app.route('/AP/')
@@ -20,10 +20,7 @@ def AP():
         f = open('battlegrounds_AP.txt', 'r', encoding='utf-8')
         lines = f.read()
         f.close()
-        newline = '\n<br />'
-        lines = lines.split('\n')
-        reply = newline.join(lines[1:-1])
-        reply += newline
+        reply = lines.replace('\n', '\n<br />')
     return reply
 
 
@@ -34,10 +31,7 @@ def AP_duo():
         f = open('battlegroundsduo_AP.txt', 'r', encoding='utf-8')
         lines = f.read()
         f.close()
-        newline = '\n<br />'
-        lines = lines.split('\n')
-        reply = newline.join(lines[1:-1])
-        reply += newline
+        reply = lines.replace('\n', '\n<br />')
     return reply
 
 
@@ -48,10 +42,7 @@ def US():
         f = open('battlegrounds_US.txt', 'r', encoding='utf-8')
         lines = f.read()
         f.close()
-        newline = '\n<br />'
-        lines = lines.split('\n')
-        reply = newline.join(lines[1:-1])
-        reply += newline
+        reply = lines.replace('\n', '\n<br />')
     return reply
 
 
@@ -62,10 +53,7 @@ def US_duo():
         f = open('battlegroundsduo_US.txt', 'r', encoding='utf-8')
         lines = f.read()
         f.close()
-        newline = '\n<br />'
-        lines = lines.split('\n')
-        reply = newline.join(lines[1:-1])
-        reply += newline
+        reply = lines.replace('\n', '\n<br />')
     return reply
 
 
@@ -76,10 +64,7 @@ def EU():
         f = open('battlegrounds_EU.txt', 'r', encoding='utf-8')
         lines = f.read()
         f.close()
-        newline = '\n<br />'
-        lines = lines.split('\n')
-        reply = newline.join(lines[1:-1])
-        reply += newline
+        reply = lines.replace('\n', '\n<br />')
     return reply
 
 
@@ -90,10 +75,7 @@ def EU_duo():
         f = open('battlegroundsduo_EU.txt', 'r', encoding='utf-8')
         lines = f.read()
         f.close()
-        newline = '\n<br />'
-        lines = lines.split('\n')
-        reply = newline.join(lines[1:-1])
-        reply += newline
+        reply = lines.replace('\n', '\n<br />')
     return reply
 
 
@@ -112,8 +94,8 @@ class MyThread(Thread):
             tries = 0
             success = False
             while tries < 3 and (not success):
+                tries = tries + 1
                 try:
-                    tries = tries + 1
                     page_data = getPage(self.region, self.mode, i)
                     self.row_list = self.row_list + page_data['leaderboard']['rows']
                     # print(f'{self.mode}_{self.region} Page {i} read success!')
@@ -144,8 +126,8 @@ def getLeaderBoard(region, mode):
     tries = 0
     success = False
     while tries < 3 and (not success):
+        tries = tries + 1
         try:
-            tries = tries + 1
             data = getPage(region, mode, 1)
             success = True
             time.sleep(1)
@@ -189,9 +171,9 @@ def getLeaderBoard(region, mode):
             del df['rank']
         except:
             return
-        df.to_csv(f'{mode}_{region}.txt', sep=' ', index=False, encoding='utf-8')
+        df.to_csv(f'{mode}_{region}.txt', sep=' ', header=False, index=False, encoding='utf-8')
     else:
-        time.sleep(120)
+        time.sleep(300)
 
 
 def run():
@@ -208,4 +190,4 @@ if __name__ == '__main__':
         getLeaderBoard('US', 'battlegroundsduo')
         getLeaderBoard('EU', 'battlegrounds')
         getLeaderBoard('EU', 'battlegroundsduo')
-        time.sleep(120)
+        time.sleep(300)
