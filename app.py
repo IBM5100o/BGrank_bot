@@ -3,9 +3,14 @@ import pandas as pd
 import time
 from flask import Flask
 from threading import Thread
-import os
 
 app = Flask('')
+replyAP = ''
+replyAP_duo = ''
+replyUS = ''
+replyUS_duo = ''
+replyEU = ''
+replyEU_duo = ''
 
 
 @app.route('/')
@@ -15,68 +20,32 @@ def main():
 
 @app.route('/AP/')
 def AP():
-    reply = ''
-    if os.path.exists('battlegrounds_AP.txt'):
-        f = open('battlegrounds_AP.txt', 'r', encoding='utf-8')
-        lines = f.read()
-        f.close()
-        reply = lines.replace('\n', '\n<br />')
-    return reply
+    return replyAP
 
 
 @app.route('/AP_duo/')
 def AP_duo():
-    reply = ''
-    if os.path.exists('battlegroundsduo_AP.txt'):
-        f = open('battlegroundsduo_AP.txt', 'r', encoding='utf-8')
-        lines = f.read()
-        f.close()
-        reply = lines.replace('\n', '\n<br />')
-    return reply
+    return replyAP_duo
 
 
 @app.route('/US/')
 def US():
-    reply = ''
-    if os.path.exists('battlegrounds_US.txt'):
-        f = open('battlegrounds_US.txt', 'r', encoding='utf-8')
-        lines = f.read()
-        f.close()
-        reply = lines.replace('\n', '\n<br />')
-    return reply
+    return replyUS
 
 
 @app.route('/US_duo/')
 def US_duo():
-    reply = ''
-    if os.path.exists('battlegroundsduo_US.txt'):
-        f = open('battlegroundsduo_US.txt', 'r', encoding='utf-8')
-        lines = f.read()
-        f.close()
-        reply = lines.replace('\n', '\n<br />')
-    return reply
+    return replyUS_duo
 
 
 @app.route('/EU/')
 def EU():
-    reply = ''
-    if os.path.exists('battlegrounds_EU.txt'):
-        f = open('battlegrounds_EU.txt', 'r', encoding='utf-8')
-        lines = f.read()
-        f.close()
-        reply = lines.replace('\n', '\n<br />')
-    return reply
+    return replyEU
 
 
 @app.route('/EU_duo/')
 def EU_duo():
-    reply = ''
-    if os.path.exists('battlegroundsduo_EU.txt'):
-        f = open('battlegroundsduo_EU.txt', 'r', encoding='utf-8')
-        lines = f.read()
-        f.close()
-        reply = lines.replace('\n', '\n<br />')
-    return reply
+    return replyEU_duo
 
 
 class MyThread(Thread):
@@ -171,7 +140,28 @@ def getLeaderBoard(region, mode):
             del df['rank']
         except:
             return
-        df.to_csv(f'{mode}_{region}.txt', sep=' ', header=False, index=False, encoding='utf-8')
+        lines = df.to_csv(sep=' ', header=False, index=False).replace('\n', '\n<br />')
+        if region == 'AP':
+            if mode == 'battlegrounds':
+                global replyAP
+                replyAP = lines
+            else:
+                global replyAP_duo
+                replyAP_duo = lines
+        elif region == 'US':
+            if mode == 'battlegrounds':
+                global replyUS
+                replyUS = lines
+            else:
+                global replyUS_duo
+                replyUS_duo = lines
+        else:
+            if mode == 'battlegrounds':
+                global replyEU
+                replyEU = lines
+            else:
+                global replyEU_duo
+                replyEU_duo = lines
     else:
         time.sleep(300)
 
