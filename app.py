@@ -3,14 +3,9 @@ import pandas as pd
 import time
 from flask import Flask
 from threading import Thread
+import os
 
 app = Flask('')
-replyAP = ''
-replyAP_duo = ''
-replyUS = ''
-replyUS_duo = ''
-replyEU = ''
-replyEU_duo = ''
 
 
 @app.route('/')
@@ -20,32 +15,62 @@ def main():
 
 @app.route('/AP/')
 def AP():
-    return replyAP
+    reply = ''
+    if os.path.exists('battlegrounds_AP.txt'):
+        f = open('battlegrounds_AP.txt', 'r', encoding='utf-8')
+        reply = f.read()
+        f.close()
+    return reply
 
 
 @app.route('/AP_duo/')
 def AP_duo():
-    return replyAP_duo
+    reply = ''
+    if os.path.exists('battlegroundsduo_AP.txt'):
+        f = open('battlegroundsduo_AP.txt', 'r', encoding='utf-8')
+        reply = f.read()
+        f.close()
+    return reply
 
 
 @app.route('/US/')
 def US():
-    return replyUS
+    reply = ''
+    if os.path.exists('battlegrounds_US.txt'):
+        f = open('battlegrounds_US.txt', 'r', encoding='utf-8')
+        reply = f.read()
+        f.close()
+    return reply
 
 
 @app.route('/US_duo/')
 def US_duo():
-    return replyUS_duo
+    reply = ''
+    if os.path.exists('battlegroundsduo_US.txt'):
+        f = open('battlegroundsduo_US.txt', 'r', encoding='utf-8')
+        reply = f.read()
+        f.close()
+    return reply
 
 
 @app.route('/EU/')
 def EU():
-    return replyEU
+    reply = ''
+    if os.path.exists('battlegrounds_EU.txt'):
+        f = open('battlegrounds_EU.txt', 'r', encoding='utf-8')
+        reply = f.read()
+        f.close()
+    return reply
 
 
 @app.route('/EU_duo/')
 def EU_duo():
-    return replyEU_duo
+    reply = ''
+    if os.path.exists('battlegroundsduo_EU.txt'):
+        f = open('battlegroundsduo_EU.txt', 'r', encoding='utf-8')
+        reply = f.read()
+        f.close()
+    return reply
 
 
 class MyThread(Thread):
@@ -140,28 +165,10 @@ def getLeaderBoard(region, mode):
             del df['rank']
         except:
             return
-        lines = df.to_csv(sep=' ', header=False, index=False).replace('\n', '\n<br />')
-        if region == 'AP':
-            if mode == 'battlegrounds':
-                global replyAP
-                replyAP = lines
-            else:
-                global replyAP_duo
-                replyAP_duo = lines
-        elif region == 'US':
-            if mode == 'battlegrounds':
-                global replyUS
-                replyUS = lines
-            else:
-                global replyUS_duo
-                replyUS_duo = lines
-        else:
-            if mode == 'battlegrounds':
-                global replyEU
-                replyEU = lines
-            else:
-                global replyEU_duo
-                replyEU_duo = lines
+        lines = df.to_csv(sep=' ', header=False, index=False, encoding='utf-8').replace('\n', '\n<br />')
+        f = open(f'{mode}_{region}.txt', 'w', encoding='utf-8')
+        f.write(lines)
+        f.close()
     else:
         time.sleep(300)
 
