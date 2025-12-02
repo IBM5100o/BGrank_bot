@@ -4,6 +4,7 @@ import time
 from flask import Flask
 from threading import Thread
 import os
+import math
 
 app = Flask('')
 
@@ -68,6 +69,26 @@ def EU_duo():
     reply = ''
     if os.path.exists('battlegroundsduo_EU.txt'):
         f = open('battlegroundsduo_EU.txt', 'r', encoding='utf-8')
+        reply = f.read()
+        f.close()
+    return reply
+
+
+@app.route('/CN/')
+def CN():
+    reply = ''
+    if os.path.exists('battlegrounds_CN.txt'):
+        f = open('battlegrounds_CN.txt', 'r', encoding='utf-8')
+        reply = f.read()
+        f.close()
+    return reply
+
+
+@app.route('/CN_duo/')
+def CN_duo():
+    reply = ''
+    if os.path.exists('battlegroundsduo_CN.txt'):
+        f = open('battlegroundsduo_CN.txt', 'r', encoding='utf-8')
         reply = f.read()
         f.close()
     return reply
@@ -173,6 +194,76 @@ def getLeaderBoard(region, mode):
         time.sleep(300)
 
 
+def getPage_CN(page, mode, seasonId):
+    url = f'https://webapi.blizzard.cn/hs-rank-api-server/api/game/ranks?page={page}&mode_name={mode}&season_id={seasonId}'
+    response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
+    if response.status_code == 200:
+        page_data = response.json()
+        return page_data
+    else:
+        error = f'Error {response.status_code} - {response.reason}'
+        # print(error)
+        raise Exception(error)
+
+
+def getLeaderBoard_CN(mode):
+    tries = 0
+    success = False
+    while tries < 3 and (not success):
+        tries = tries + 1
+        try:
+            data = getPage('AP', 'battlegrounds', 1)
+            success = True
+            time.sleep(1)
+        except:
+            time.sleep(10)
+    if not success:
+        return
+    seasonId = data['seasonId']
+
+    tries = 0
+    success = False
+    while tries < 3 and (not success):
+        tries = tries + 1
+        try:
+            data = getPage_CN(1, mode, seasonId)
+            success = True
+            time.sleep(1)
+        except:
+            time.sleep(10)
+    if not success:
+        return
+
+    total = data['data']['total']
+    totalPages = math.ceil(total / 25.0)
+    rows_list = data['data']['list']
+
+    for i in range(2, totalPages+1):
+        tries = 0
+        success = False
+        while tries < 3 and (not success):
+            tries = tries + 1
+            try:
+                data = getPage_CN(i, mode, seasonId)
+                rows_list = rows_list + data['data']['list']
+                success = True
+                time.sleep(1)
+            except:
+                time.sleep(10)
+        if not success:
+            return
+
+    df = pd.DataFrame(rows_list)
+    try:
+        del df['position']
+    except:
+        return
+    lines = df.to_csv(sep=' ', header=False, index=False, encoding='utf-8').replace('\n', '\n<br />')
+    f = open(f'{mode}_CN.txt', 'w', encoding='utf-8')
+    f.write(lines)
+    f.close()
+
+
 def run():
     app.run(host="0.0.0.0", port=8080)
 
@@ -187,4 +278,6 @@ if __name__ == '__main__':
         getLeaderBoard('US', 'battlegroundsduo')
         getLeaderBoard('EU', 'battlegrounds')
         getLeaderBoard('EU', 'battlegroundsduo')
+        getLeaderBoard_CN('battlegrounds')
+        getLeaderBoard_CN('battlegroundsduo')
         time.sleep(300)
