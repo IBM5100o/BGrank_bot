@@ -144,6 +144,8 @@ def getLeaderBoard(region, mode):
         tries = tries + 1
         try:
             data = getPage(region, mode, 1)
+            totalPages = data['leaderboard']['pagination']['totalPages']
+            rows_list = data['leaderboard']['rows']
             success = True
             time.sleep(1)
         except:
@@ -151,16 +153,14 @@ def getLeaderBoard(region, mode):
     if not success:
         return
         
-    totalPages = data['leaderboard']['pagination']['totalPages']
     totalFails = 0
-    rows_list = data['leaderboard']['rows']
     threads = []
 
     if totalPages > 1:
-        if totalPages < 10:
+        if totalPages < 20:
             threads_num = 1
         else:
-            threads_num = 10
+            threads_num = 5
         page_slice = totalPages // threads_num
 
         for i in range(threads_num):
@@ -213,13 +213,13 @@ def getLeaderBoard_CN(mode):
         tries = tries + 1
         try:
             data = getPage('AP', 'battlegrounds', 1)
+            seasonId = data['seasonId']
             success = True
             time.sleep(1)
         except:
             time.sleep(10)
     if not success:
         return
-    seasonId = data['seasonId']
 
     tries = 0
     success = False
@@ -227,16 +227,15 @@ def getLeaderBoard_CN(mode):
         tries = tries + 1
         try:
             data = getPage_CN(1, mode, seasonId)
+            total = data['data']['total']
+            totalPages = math.ceil(total / 25.0)
+            rows_list = data['data']['list']
             success = True
             time.sleep(1)
         except:
             time.sleep(10)
     if not success:
         return
-
-    total = data['data']['total']
-    totalPages = math.ceil(total / 25.0)
-    rows_list = data['data']['list']
 
     for i in range(2, totalPages+1):
         tries = 0
