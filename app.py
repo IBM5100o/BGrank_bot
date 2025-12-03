@@ -159,7 +159,7 @@ def getLeaderBoard(region, mode):
         return
 
     if totalPages > 1:
-        if totalPages < 20:
+        if totalPages < 10:
             threads_num = 1
         else:
             threads_num = 10
