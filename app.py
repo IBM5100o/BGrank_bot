@@ -138,6 +138,11 @@ def getPage(region, leaderboardId, pageNumber):
 
 
 def getLeaderBoard(region, mode):
+    totalPages = 0
+    totalFails = 0
+    rows_list = []
+    threads = []
+
     tries = 0
     success = False
     while tries < 3 and (not success):
@@ -152,15 +157,12 @@ def getLeaderBoard(region, mode):
             time.sleep(10)
     if not success:
         return
-        
-    totalFails = 0
-    threads = []
 
     if totalPages > 1:
         if totalPages < 20:
             threads_num = 1
         else:
-            threads_num = 5
+            threads_num = 10
         page_slice = totalPages // threads_num
 
         for i in range(threads_num):
@@ -181,8 +183,8 @@ def getLeaderBoard(region, mode):
             totalFails = totalFails + threads[i].fails
 
     if totalFails < 3:
-        df = pd.DataFrame(rows_list)
         try:
+            df = pd.DataFrame(rows_list)
             del df['rank']
         except:
             return
@@ -207,6 +209,10 @@ def getPage_CN(page, mode, seasonId):
 
 
 def getLeaderBoard_CN(mode):
+    seasonId = 0
+    totalPages = 0
+    rows_list = []
+
     tries = 0
     success = False
     while tries < 3 and (not success):
@@ -252,8 +258,8 @@ def getLeaderBoard_CN(mode):
         if not success:
             return
 
-    df = pd.DataFrame(rows_list)
     try:
+        df = pd.DataFrame(rows_list)
         del df['position']
     except:
         return
