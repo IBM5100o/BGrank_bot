@@ -1,96 +1,68 @@
-import requests
-import pandas as pd
-import time
-from flask import Flask
-from threading import Thread
 import os
 import math
+import time
+import requests
+import pandas as pd
+from flask import Flask
+from threading import Thread
 
 app = Flask('')
 
 
 @app.route('/')
-def main():
-    return 'This is a bot to get the leaderboard from Blizzard API.'
+def home():
+    return 'Bot information: https://github.com/IBM5100o/BGrank_bot'
 
 
 @app.route('/AP/')
 def AP():
-    reply = ''
-    if os.path.exists('battlegrounds_AP.txt'):
-        f = open('battlegrounds_AP.txt', 'r', encoding='utf-8')
-        reply = f.read()
-        f.close()
-    return reply
+    return getReply('battlegrounds_AP.txt')
 
 
 @app.route('/AP_duo/')
 def AP_duo():
-    reply = ''
-    if os.path.exists('battlegroundsduo_AP.txt'):
-        f = open('battlegroundsduo_AP.txt', 'r', encoding='utf-8')
-        reply = f.read()
-        f.close()
-    return reply
+    return getReply('battlegroundsduo_AP.txt')
 
 
 @app.route('/US/')
 def US():
-    reply = ''
-    if os.path.exists('battlegrounds_US.txt'):
-        f = open('battlegrounds_US.txt', 'r', encoding='utf-8')
-        reply = f.read()
-        f.close()
-    return reply
+    return getReply('battlegrounds_US.txt')
 
 
 @app.route('/US_duo/')
 def US_duo():
-    reply = ''
-    if os.path.exists('battlegroundsduo_US.txt'):
-        f = open('battlegroundsduo_US.txt', 'r', encoding='utf-8')
-        reply = f.read()
-        f.close()
-    return reply
+    return getReply('battlegroundsduo_US.txt')
 
 
 @app.route('/EU/')
 def EU():
-    reply = ''
-    if os.path.exists('battlegrounds_EU.txt'):
-        f = open('battlegrounds_EU.txt', 'r', encoding='utf-8')
-        reply = f.read()
-        f.close()
-    return reply
+    return getReply('battlegrounds_EU.txt')
 
 
 @app.route('/EU_duo/')
 def EU_duo():
-    reply = ''
-    if os.path.exists('battlegroundsduo_EU.txt'):
-        f = open('battlegroundsduo_EU.txt', 'r', encoding='utf-8')
-        reply = f.read()
-        f.close()
-    return reply
+    return getReply('battlegroundsduo_EU.txt')
 
 
 @app.route('/CN/')
 def CN():
-    reply = ''
-    if os.path.exists('battlegrounds_CN.txt'):
-        f = open('battlegrounds_CN.txt', 'r', encoding='utf-8')
-        reply = f.read()
-        f.close()
-    return reply
+    return getReply('battlegrounds_CN.txt')
 
 
 @app.route('/CN_duo/')
 def CN_duo():
+    return getReply('battlegroundsduo_CN.txt')
+
+
+def getReply(fileName):
     reply = ''
-    if os.path.exists('battlegroundsduo_CN.txt'):
-        f = open('battlegroundsduo_CN.txt', 'r', encoding='utf-8')
-        reply = f.read()
-        f.close()
+    try:
+        if os.path.exists(fileName):
+            f = open(fileName, 'r', encoding='utf-8')
+            reply = f.read()
+            f.close()
+    except:
+        pass
     return reply
 
 
@@ -102,7 +74,7 @@ class MyThread(Thread):
         self.region = region
         self.mode = mode
         self.row_list = []
-        self.fails = 0
+        self.fail = False
 
     def run(self):
         for i in range(self.start_page, self.end_page + 1):
@@ -113,16 +85,13 @@ class MyThread(Thread):
                 try:
                     page_data = getPage(self.region, self.mode, i)
                     self.row_list = self.row_list + page_data['leaderboard']['rows']
-                    # print(f'{self.mode}_{self.region} Page {i} read success!')
                     success = True
                     time.sleep(1)
                 except:
-                    # print(f'Error: {self.mode}_{self.region} Page {i} waiting 10 seconds to try again')
                     time.sleep(10)
             if not success:
-                self.fails = self.fails + 1
-                if self.fails >= 3:
-                    break
+                self.fail = True
+                break
 
 
 def getPage(region, leaderboardId, pageNumber):
@@ -133,13 +102,11 @@ def getPage(region, leaderboardId, pageNumber):
         return page_data
     else:
         error = f'Error {response.status_code} - {response.reason}'
-        # print(error)
         raise Exception(error)
 
 
 def getLeaderBoard(region, mode):
     totalPages = 0
-    totalFails = 0
     rows_list = []
     threads = []
 
@@ -179,21 +146,19 @@ def getLeaderBoard(region, mode):
 
         for i in range(threads_num):
             threads[i].join()
+            if threads[i].fail:
+                return
             rows_list = rows_list + threads[i].row_list
-            totalFails = totalFails + threads[i].fails
 
-    if totalFails < 3:
-        try:
-            df = pd.DataFrame(rows_list)
-            del df['rank']
-        except:
-            return
+    try:
+        df = pd.DataFrame(rows_list)
+        del df['rank']
         lines = df.to_csv(sep=' ', header=False, index=False, encoding='utf-8').replace('\n', '\n<br />')
         f = open(f'{mode}_{region}.txt', 'w', encoding='utf-8')
         f.write(lines)
         f.close()
-    else:
-        time.sleep(300)
+    except:
+        pass
 
 
 def getPage_CN(page, mode, seasonId):
@@ -204,7 +169,6 @@ def getPage_CN(page, mode, seasonId):
         return page_data
     else:
         error = f'Error {response.status_code} - {response.reason}'
-        # print(error)
         raise Exception(error)
 
 
@@ -261,20 +225,20 @@ def getLeaderBoard_CN(mode):
     try:
         df = pd.DataFrame(rows_list)
         del df['position']
+        lines = df.to_csv(sep=' ', header=False, index=False, encoding='utf-8').replace('\n', '\n<br />')
+        f = open(f'{mode}_CN.txt', 'w', encoding='utf-8')
+        f.write(lines)
+        f.close()
     except:
-        return
-    lines = df.to_csv(sep=' ', header=False, index=False, encoding='utf-8').replace('\n', '\n<br />')
-    f = open(f'{mode}_CN.txt', 'w', encoding='utf-8')
-    f.write(lines)
-    f.close()
+        pass
 
 
-def run():
-    app.run(host="0.0.0.0", port=8080)
+def runFlask():
+    app.run(host='0.0.0.0', port=8080)
 
 
 if __name__ == '__main__':
-    server = Thread(target=run)
+    server = Thread(target=runFlask)
     server.start()
     while True:
         getLeaderBoard('AP', 'battlegrounds')

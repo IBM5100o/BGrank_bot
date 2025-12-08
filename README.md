@@ -22,4 +22,4 @@ https://hearthstone.blizzard.com/en-us/api/community/leaderboardsData?region=AP&
 https://hearthstone.blizzard.com/en-us/api/community/leaderboardsData?region=AP&leaderboardId=battlegroundsduo&page=1  
 
 CN api:  
-https://webapi.blizzard.cn/hs-rank-api-server/api/game/ranks?page=1&mode_name=battlegrounds&season_id=16  
+https://webapi.blizzard.cn/hs-rank-api-server/api/game/ranks?page=1&mode_name=battlegrounds&season_id=17  
