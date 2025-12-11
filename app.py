@@ -84,7 +84,8 @@ class MyThread(Thread):
                 tries = tries + 1
                 try:
                     page_data = getPage(self.region, self.mode, i)
-                    self.row_list = self.row_list + page_data['leaderboard']['rows']
+                    tmp = self.row_list + page_data['leaderboard']['rows']
+                    self.row_list = tmp
                     success = True
                     time.sleep(1)
                 except:
@@ -166,7 +167,12 @@ def getPage_CN(page, mode, seasonId):
     response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
     if response.status_code == 200:
         page_data = response.json()
-        return page_data
+        code = page_data['code']
+        if code == 0:
+            return page_data
+        else:
+            error = f'Error Code: {code}'
+            raise Exception(error)
     else:
         error = f'Error {response.status_code} - {response.reason}'
         raise Exception(error)
@@ -214,7 +220,8 @@ def getLeaderBoard_CN(mode):
             tries = tries + 1
             try:
                 data = getPage_CN(i, mode, seasonId)
-                rows_list = rows_list + data['data']['list']
+                tmp = rows_list + data['data']['list']
+                rows_list = tmp
                 success = True
                 time.sleep(1)
             except:
