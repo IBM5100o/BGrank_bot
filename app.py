@@ -84,8 +84,7 @@ class MyThread(Thread):
                 tries = tries + 1
                 try:
                     page_data = getPage(self.region, self.mode, i)
-                    tmp = self.row_list + page_data['leaderboard']['rows']
-                    self.row_list = tmp
+                    self.row_list = self.row_list + page_data['leaderboard']['rows']
                     success = True
                     time.sleep(1)
                 except:
@@ -126,32 +125,36 @@ def getLeaderBoard(region, mode):
     if not success:
         return
 
-    if totalPages > 1:
-        if totalPages < 10:
-            threads_num = 1
-        else:
-            threads_num = 10
-        page_slice = totalPages // threads_num
-
-        for i in range(threads_num):
-            if i == 0:
-                start_p = 2
-            else:
-                start_p = page_slice * i + 1
-            if i == (threads_num - 1):
-                end_p = totalPages
-            else:
-                end_p = page_slice * (i + 1)
-            threads.append(MyThread(start_p, end_p, region, mode))
-            threads[i].start()
-
-        for i in range(threads_num):
-            threads[i].join()
-            if threads[i].fail:
-                return
-            rows_list = rows_list + threads[i].row_list
-
     try:
+        if totalPages > 1:
+            if totalPages < 10:
+                threads_num = 1
+            else:
+                threads_num = 10
+            page_slice = totalPages // threads_num
+
+            for i in range(threads_num):
+                if i == 0:
+                    start_p = 2
+                else:
+                    start_p = page_slice * i + 1
+                if i == (threads_num - 1):
+                    end_p = totalPages
+                else:
+                    end_p = page_slice * (i + 1)
+                threads.append(MyThread(start_p, end_p, region, mode))
+                threads[i].start()
+
+            success = True
+            for i in range(threads_num):
+                threads[i].join()
+                if threads[i].fail:
+                    success = False
+                if success:
+                    rows_list = rows_list + threads[i].row_list
+            if not success:
+                return
+
         df = pd.DataFrame(rows_list)
         del df['rank']
         lines = df.to_csv(sep=' ', header=False, index=False, encoding='utf-8').replace('\n', '\n<br />')
@@ -220,8 +223,7 @@ def getLeaderBoard_CN(mode):
             tries = tries + 1
             try:
                 data = getPage_CN(i, mode, seasonId)
-                tmp = rows_list + data['data']['list']
-                rows_list = tmp
+                rows_list = rows_list + data['data']['list']
                 success = True
                 time.sleep(1)
             except:
@@ -248,12 +250,15 @@ if __name__ == '__main__':
     server = Thread(target=runFlask)
     server.start()
     while True:
-        getLeaderBoard('AP', 'battlegrounds')
-        getLeaderBoard('AP', 'battlegroundsduo')
-        getLeaderBoard('US', 'battlegrounds')
-        getLeaderBoard('US', 'battlegroundsduo')
-        getLeaderBoard('EU', 'battlegrounds')
-        getLeaderBoard('EU', 'battlegroundsduo')
-        getLeaderBoard_CN('battlegrounds')
-        getLeaderBoard_CN('battlegroundsduo')
+        try:
+            getLeaderBoard('AP', 'battlegrounds')
+            getLeaderBoard('AP', 'battlegroundsduo')
+            getLeaderBoard('US', 'battlegrounds')
+            getLeaderBoard('US', 'battlegroundsduo')
+            getLeaderBoard('EU', 'battlegrounds')
+            getLeaderBoard('EU', 'battlegroundsduo')
+            getLeaderBoard_CN('battlegrounds')
+            getLeaderBoard_CN('battlegroundsduo')
+        except:
+            pass
         time.sleep(300)
