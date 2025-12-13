@@ -1,10 +1,33 @@
 import os
 import math
 import time
-import requests
+import logging
+import aiohttp
+import asyncio
+import functools
 import pandas as pd
 from flask import Flask
 from threading import Thread
+from logging.handlers import RotatingFileHandler
+
+HTTP_SEMAPHORE = asyncio.Semaphore(8)
+
+logger = logging.getLogger('BGrankBot')
+logger.setLevel(logging.INFO)
+
+formatter = logging.Formatter(
+    '%(asctime)s [%(levelname)s] %(message)s'
+)
+
+file_handler = RotatingFileHandler(
+    'bgrank.log',
+    maxBytes=5 * 1024 * 1024,
+    backupCount=5,
+    encoding='utf-8'
+)
+
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 app = Flask('')
 
@@ -58,207 +81,199 @@ def getReply(fileName):
     reply = ''
     try:
         if os.path.exists(fileName):
-            f = open(fileName, 'r', encoding='utf-8')
-            reply = f.read()
-            f.close()
-    except:
-        pass
+            with open(fileName, 'r', encoding='utf-8') as f:
+                reply = f.read()
+    except Exception:
+        logger.exception(f'Read {fileName} fail')
     return reply
 
 
-class MyThread(Thread):
-    def __init__(self, start_page, end_page, region, mode):
-        Thread.__init__(self)
-        self.start_page = start_page
-        self.end_page = end_page
-        self.region = region
-        self.mode = mode
-        self.row_list = []
-        self.fail = False
-
-    def run(self):
-        for i in range(self.start_page, self.end_page + 1):
-            tries = 0
-            success = False
-            while tries < 3 and (not success):
-                tries = tries + 1
+def async_retry(
+    tries=3,
+    delay=2,
+    backoff=2,
+    exceptions=(Exception,),
+    logger=None
+):
+    def decorator(func):
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs):
+            _tries, _delay = tries, delay
+            while _tries > 1:
                 try:
-                    page_data = getPage(self.region, self.mode, i)
-                    self.row_list = self.row_list + page_data['leaderboard']['rows']
-                    success = True
-                    time.sleep(1)
-                except:
-                    time.sleep(10)
-            if not success:
-                self.fail = True
-                break
+                    return await func(*args, **kwargs)
+                except exceptions as e:
+                    if logger:
+                        logger.warning(
+                            f'{func.__name__} failed: {e}, retry in {_delay}s'
+                        )
+                    await asyncio.sleep(_delay)
+                    _tries -= 1
+                    _delay *= backoff
+            return await func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 
-def getPage(region, leaderboardId, pageNumber):
-    url = f'https://hearthstone.blizzard.com/en-us/api/community/leaderboardsData?region={region}&leaderboardId={leaderboardId}&page={pageNumber}'
-    response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-    if response.status_code == 200:
-        page_data = response.json()
-        return page_data
-    else:
-        error = f'Error {response.status_code} - {response.reason}'
-        raise Exception(error)
+@async_retry(tries=3, delay=3, logger=logger)
+async def getPage_async(session, region, leaderboardId, pageNumber):
+    url = (
+        'https://hearthstone.blizzard.com/en-us/api/community/leaderboardsData'
+        f'?region={region}&leaderboardId={leaderboardId}&page={pageNumber}'
+    )
+    # logger.info(f'Async GetPage {region} {leaderboardId} page={pageNumber}')
 
-
-def getLeaderBoard(region, mode):
-    totalPages = 0
-    rows_list = []
-    threads = []
-
-    tries = 0
-    success = False
-    while tries < 3 and (not success):
-        tries = tries + 1
-        try:
-            data = getPage(region, mode, 1)
-            totalPages = data['leaderboard']['pagination']['totalPages']
-            rows_list = data['leaderboard']['rows']
-            success = True
-            time.sleep(1)
-        except:
-            time.sleep(10)
-    if not success:
-        return
-
-    try:
-        if totalPages > 1:
-            if totalPages < 10:
-                threads_num = 1
+    async with HTTP_SEMAPHORE:
+        async with session.get(url, timeout=10) as resp:
+            if resp.status == 200:
+                return await resp.json()
             else:
-                threads_num = 10
-            page_slice = totalPages // threads_num
+                raise Exception(f'HTTP {resp.status}')
 
-            for i in range(threads_num):
-                if i == 0:
-                    start_p = 2
-                else:
-                    start_p = page_slice * i + 1
-                if i == (threads_num - 1):
-                    end_p = totalPages
-                else:
-                    end_p = page_slice * (i + 1)
-                threads.append(MyThread(start_p, end_p, region, mode))
-                threads[i].start()
 
-            success = True
-            for i in range(threads_num):
-                threads[i].join()
-                if threads[i].fail:
-                    success = False
-                if success:
-                    rows_list = rows_list + threads[i].row_list
-            if not success:
-                return
+@async_retry(tries=3, delay=3, logger=logger)
+async def getPage_CN_async(session, page, mode, seasonId):
+    url = (
+        'https://webapi.blizzard.cn/hs-rank-api-server/api/game/ranks'
+        f'?page={page}&mode_name={mode}&season_id={seasonId}'
+    )
+    # logger.info(f'Async GetPage_CN page={page} mode={mode}')
 
-        df = pd.DataFrame(rows_list)
+    async with HTTP_SEMAPHORE:
+        async with session.get(url, timeout=10) as resp:
+            if resp.status != 200:
+                raise Exception(f'HTTP {resp.status}')
+
+            data = await resp.json()
+            code = data['code']
+            if code != 0:
+                raise Exception(f'API code {code}')
+
+            return data
+
+
+async def getLeaderBoard_async(region, mode):
+    # logger.info(f'Async update leaderboard: {region} {mode}')
+
+    async with aiohttp.ClientSession(
+        headers={'User-Agent': 'Mozilla/5.0'}
+    ) as session:
+
+        first = await getPage_async(session, region, mode, 1)
+        totalPages = first['leaderboard']['pagination']['totalPages']
+        rows = first['leaderboard']['rows']
+
+        tasks = []
+        for page in range(2, totalPages + 1):
+            tasks.append(
+                getPage_async(session, region, mode, page)
+            )
+
+        results = await asyncio.gather(*tasks)
+
+        for r in results:
+            rows.extend(r['leaderboard']['rows'])
+
+    df = pd.DataFrame(rows)
+    if 'rank' in df.columns:
         del df['rank']
-        lines = df.to_csv(sep=' ', header=False, index=False, encoding='utf-8').replace('\n', '\n<br />')
-        f = open(f'{mode}_{region}.txt', 'w', encoding='utf-8')
-        f.write(lines)
-        f.close()
-    except:
-        pass
-
-
-def getPage_CN(page, mode, seasonId):
-    url = f'https://webapi.blizzard.cn/hs-rank-api-server/api/game/ranks?page={page}&mode_name={mode}&season_id={seasonId}'
-    response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-    if response.status_code == 200:
-        page_data = response.json()
-        code = page_data['code']
-        if code == 0:
-            return page_data
-        else:
-            error = f'Error Code: {code}'
-            raise Exception(error)
     else:
-        error = f'Error {response.status_code} - {response.reason}'
-        raise Exception(error)
-
-
-def getLeaderBoard_CN(mode):
-    seasonId = 0
-    totalPages = 0
-    rows_list = []
-
-    tries = 0
-    success = False
-    while tries < 3 and (not success):
-        tries = tries + 1
-        try:
-            data = getPage('AP', 'battlegrounds', 1)
-            seasonId = data['seasonId']
-            success = True
-            time.sleep(1)
-        except:
-            time.sleep(10)
-    if not success:
+        logger.warning('Column rank not found')
         return
 
-    tries = 0
-    success = False
-    while tries < 3 and (not success):
-        tries = tries + 1
-        try:
-            data = getPage_CN(1, mode, seasonId)
-            total = data['data']['total']
-            totalPages = math.ceil(total / 25.0)
-            rows_list = data['data']['list']
-            success = True
-            time.sleep(1)
-        except:
-            time.sleep(10)
-    if not success:
-        return
+    lines = df.to_csv(
+        sep=' ',
+        header=False,
+        index=False,
+        encoding='utf-8'
+    ).replace('\n', '\n<br />')
 
-    for i in range(2, totalPages+1):
-        tries = 0
-        success = False
-        while tries < 3 and (not success):
-            tries = tries + 1
-            try:
-                data = getPage_CN(i, mode, seasonId)
-                rows_list = rows_list + data['data']['list']
-                success = True
-                time.sleep(1)
-            except:
-                time.sleep(10)
-        if not success:
-            return
-
-    try:
-        df = pd.DataFrame(rows_list)
-        del df['position']
-        lines = df.to_csv(sep=' ', header=False, index=False, encoding='utf-8').replace('\n', '\n<br />')
-        f = open(f'{mode}_CN.txt', 'w', encoding='utf-8')
+    with open(f'{mode}_{region}.txt', 'w', encoding='utf-8') as f:
         f.write(lines)
-        f.close()
-    except:
-        pass
+
+    # logger.info(f'Async update success: {region} {mode}')
+
+
+async def getLeaderBoard_CN_async(mode):
+    # logger.info(f'Async update CN leaderboard: {mode}')
+
+    async with aiohttp.ClientSession(
+        headers={'User-Agent': 'Mozilla/5.0'}
+    ) as session:
+
+        first = await getPage_async(session, 'AP', 'battlegrounds', 1)
+        seasonId = first['seasonId']
+
+        data = await getPage_CN_async(session, 1, mode, seasonId)
+        total = data['data']['total']
+        totalPages = math.ceil(total / 25.0)
+        rows = data['data']['list']
+
+        tasks = []
+        for page in range(2, totalPages + 1):
+            tasks.append(
+                getPage_CN_async(session, page, mode, seasonId)
+            )
+
+        results = await asyncio.gather(*tasks)
+
+        for r in results:
+            rows.extend(r['data']['list'])
+
+    df = pd.DataFrame(rows)
+    if 'position' in df.columns:
+        del df['position']
+    else:
+        logger.warning('Column position not found')
+        return
+
+    lines = df.to_csv(
+        sep=' ',
+        header=False,
+        index=False,
+        encoding='utf-8'
+    ).replace('\n', '\n<br />')
+
+    with open(f'{mode}_CN.txt', 'w', encoding='utf-8') as f:
+        f.write(lines)
+
+    # logger.info(f'Async CN update success: {mode}')
+
+
+async def safe_task(coro, name):
+    try:
+        await coro
+        # logger.info(f'{name} success')
+    except Exception:
+        logger.exception(f'{name} failed')
+
+
+async def async_update_all():
+    await asyncio.gather(
+        safe_task(getLeaderBoard_async('AP', 'battlegrounds'), 'AP BG'),
+        safe_task(getLeaderBoard_async('AP', 'battlegroundsduo'), 'AP BG Duo'),
+        safe_task(getLeaderBoard_async('US', 'battlegrounds'), 'US BG'),
+        safe_task(getLeaderBoard_async('US', 'battlegroundsduo'), 'US BG Duo'),
+        safe_task(getLeaderBoard_async('EU', 'battlegrounds'), 'EU BG'),
+        safe_task(getLeaderBoard_async('EU', 'battlegroundsduo'), 'EU BG Duo'),
+        safe_task(getLeaderBoard_CN_async('battlegrounds'), 'CN BG'),
+        safe_task(getLeaderBoard_CN_async('battlegroundsduo'), 'CN BG Duo'),
+    )
 
 
 def runFlask():
     app.run(host='0.0.0.0', port=8080)
 
 
-if __name__ == '__main__':
-    server = Thread(target=runFlask)
-    server.start()
-    while True:
-        try:
-            getLeaderBoard('AP', 'battlegrounds')
-            getLeaderBoard('AP', 'battlegroundsduo')
-            getLeaderBoard('US', 'battlegrounds')
-            getLeaderBoard('US', 'battlegroundsduo')
-            getLeaderBoard('EU', 'battlegrounds')
-            getLeaderBoard('EU', 'battlegroundsduo')
-            getLeaderBoard_CN('battlegrounds')
-            getLeaderBoard_CN('battlegroundsduo')
-        except:
-            pass
-        time.sleep(300)
+server = Thread(target=runFlask, daemon=True)
+server.start()
+
+while True:
+    # logger.info('===== Async global update start =====')
+    try:
+        asyncio.run(async_update_all())
+    except Exception:
+        logger.exception('Async update failed (unexpected)')
+
+    # logger.info('===== Async update finished, sleep 300s =====')
+    time.sleep(300)
