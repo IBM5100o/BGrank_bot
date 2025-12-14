@@ -1,6 +1,5 @@
 import os
 import math
-import time
 import logging
 import aiohttp
 import asyncio
@@ -10,6 +9,7 @@ from flask import Flask
 from threading import Thread
 from logging.handlers import RotatingFileHandler
 
+HTTP_SESSION: aiohttp.ClientSession | None = None
 HTTP_SEMAPHORE = asyncio.Semaphore(8)
 
 logger = logging.getLogger('BGrankBot')
@@ -21,8 +21,8 @@ formatter = logging.Formatter(
 
 file_handler = RotatingFileHandler(
     'bgrank.log',
-    maxBytes=5 * 1024 * 1024,
-    backupCount=5,
+    maxBytes=3 * 1024 * 1024,
+    backupCount=3,
     encoding='utf-8'
 )
 
@@ -116,7 +116,7 @@ def async_retry(
 
 
 @async_retry(tries=3, delay=3, logger=logger)
-async def getPage_async(session, region, leaderboardId, pageNumber):
+async def getPage_async(region, leaderboardId, pageNumber):
     url = (
         'https://hearthstone.blizzard.com/en-us/api/community/leaderboardsData'
         f'?region={region}&leaderboardId={leaderboardId}&page={pageNumber}'
@@ -124,7 +124,7 @@ async def getPage_async(session, region, leaderboardId, pageNumber):
     # logger.info(f'Async GetPage {region} {leaderboardId} page={pageNumber}')
 
     async with HTTP_SEMAPHORE:
-        async with session.get(url, timeout=10) as resp:
+        async with HTTP_SESSION.get(url) as resp:
             if resp.status == 200:
                 return await resp.json()
             else:
@@ -132,7 +132,7 @@ async def getPage_async(session, region, leaderboardId, pageNumber):
 
 
 @async_retry(tries=3, delay=3, logger=logger)
-async def getPage_CN_async(session, page, mode, seasonId):
+async def getPage_CN_async(page, mode, seasonId):
     url = (
         'https://webapi.blizzard.cn/hs-rank-api-server/api/game/ranks'
         f'?page={page}&mode_name={mode}&season_id={seasonId}'
@@ -140,7 +140,7 @@ async def getPage_CN_async(session, page, mode, seasonId):
     # logger.info(f'Async GetPage_CN page={page} mode={mode}')
 
     async with HTTP_SEMAPHORE:
-        async with session.get(url, timeout=10) as resp:
+        async with HTTP_SESSION.get(url) as resp:
             if resp.status != 200:
                 raise Exception(f'HTTP {resp.status}')
 
@@ -155,24 +155,20 @@ async def getPage_CN_async(session, page, mode, seasonId):
 async def getLeaderBoard_async(region, mode):
     # logger.info(f'Async update leaderboard: {region} {mode}')
 
-    async with aiohttp.ClientSession(
-        headers={'User-Agent': 'Mozilla/5.0'}
-    ) as session:
+    first = await getPage_async(region, mode, 1)
+    totalPages = first['leaderboard']['pagination']['totalPages']
+    rows = first['leaderboard']['rows']
 
-        first = await getPage_async(session, region, mode, 1)
-        totalPages = first['leaderboard']['pagination']['totalPages']
-        rows = first['leaderboard']['rows']
+    tasks = []
+    for page in range(2, totalPages + 1):
+        tasks.append(
+            getPage_async(region, mode, page)
+        )
 
-        tasks = []
-        for page in range(2, totalPages + 1):
-            tasks.append(
-                getPage_async(session, region, mode, page)
-            )
+    results = await asyncio.gather(*tasks)
 
-        results = await asyncio.gather(*tasks)
-
-        for r in results:
-            rows.extend(r['leaderboard']['rows'])
+    for r in results:
+        rows.extend(r['leaderboard']['rows'])
 
     df = pd.DataFrame(rows)
     if 'rank' in df.columns:
@@ -197,28 +193,24 @@ async def getLeaderBoard_async(region, mode):
 async def getLeaderBoard_CN_async(mode):
     # logger.info(f'Async update CN leaderboard: {mode}')
 
-    async with aiohttp.ClientSession(
-        headers={'User-Agent': 'Mozilla/5.0'}
-    ) as session:
+    first = await getPage_async('AP', 'battlegrounds', 1)
+    seasonId = first['seasonId']
 
-        first = await getPage_async(session, 'AP', 'battlegrounds', 1)
-        seasonId = first['seasonId']
+    data = await getPage_CN_async(1, mode, seasonId)
+    total = data['data']['total']
+    totalPages = math.ceil(total / 25.0)
+    rows = data['data']['list']
 
-        data = await getPage_CN_async(session, 1, mode, seasonId)
-        total = data['data']['total']
-        totalPages = math.ceil(total / 25.0)
-        rows = data['data']['list']
+    tasks = []
+    for page in range(2, totalPages + 1):
+        tasks.append(
+            getPage_CN_async(page, mode, seasonId)
+        )
 
-        tasks = []
-        for page in range(2, totalPages + 1):
-            tasks.append(
-                getPage_CN_async(session, page, mode, seasonId)
-            )
+    results = await asyncio.gather(*tasks)
 
-        results = await asyncio.gather(*tasks)
-
-        for r in results:
-            rows.extend(r['data']['list'])
+    for r in results:
+        rows.extend(r['data']['list'])
 
     df = pd.DataFrame(rows)
     if 'position' in df.columns:
@@ -261,19 +253,52 @@ async def async_update_all():
     )
 
 
+async def init_http_session():
+    global HTTP_SESSION
+    if HTTP_SESSION is None:
+        timeout = aiohttp.ClientTimeout(
+            total=30,
+            connect=10,
+            sock_read=20,
+        )
+        connector = aiohttp.TCPConnector(
+            limit=50,
+            limit_per_host=10,
+            enable_cleanup_closed=True,
+        )
+        HTTP_SESSION = aiohttp.ClientSession(
+            timeout=timeout,
+            connector=connector,
+            headers={'User-Agent': 'Mozilla/5.0'},
+        )
+
+
+async def close_http_session():
+    global HTTP_SESSION
+    if HTTP_SESSION is not None:
+        await HTTP_SESSION.close()
+        HTTP_SESSION = None
+
+
+async def main_loop():
+    await init_http_session()
+
+    try:
+        while True:
+            try:
+                await async_update_all()
+            except Exception:
+                logger.exception('Async update failed (unexpected)')
+            await asyncio.sleep(300)
+    finally:
+        await close_http_session()
+
+
 def runFlask():
     app.run(host='0.0.0.0', port=8080)
 
 
-server = Thread(target=runFlask, daemon=True)
-server.start()
-
-while True:
-    # logger.info('===== Async global update start =====')
-    try:
-        asyncio.run(async_update_all())
-    except Exception:
-        logger.exception('Async update failed (unexpected)')
-
-    # logger.info('===== Async update finished, sleep 300s =====')
-    time.sleep(300)
+if __name__ == '__main__':
+    server = Thread(target=runFlask, daemon=True)
+    server.start()
+    asyncio.run(main_loop())
